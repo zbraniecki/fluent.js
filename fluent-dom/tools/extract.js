@@ -26,7 +26,8 @@ if (program.args.length < 1) {
   parseHTML(program.args[0])
     .then(buildFTLContext)
     .then(analyzeContext)
-    .then(syncContext);
+    .then(syncContext)
+    .then(saveFTLs)
 }
 
 function parseHTML(htmlFilePath) {
@@ -62,16 +63,20 @@ function buildFTLContext(htmlData) {
   
   return Promise.all(fileReads).then(files => {
     let ctx = {
-      files: filePaths,
+      files: {},
       msgs: {}
     }; 
-    files.forEach(file => {
+    files.forEach((file, i) => {
       let ftlResource = loadFTL(file);
       ftlResource.body.forEach(entry => {
         if (entry.type === 'Message') {
-          ctx.msgs[entry.id.name] = entry;
+          ctx.msgs[entry.id.name] = {
+            filePath: filePaths[i],
+            entry
+          };
         }
-      })
+      });
+      ctx.files[filePaths[i]] = ftlResource;
     })
     return {
       ftlContext: ctx,
@@ -84,11 +89,23 @@ function analyzeContext({ ftlContext, htmlData }) {
   const report = [];
 
   for (l10nId in ftlContext.msgs) {
-    if (!l10nIdInNodeList(l10nId, htmlData.l10nNodes)) {
+    const node = l10nIdInNodeList(l10nId, htmlData.l10nNodes);
+    if (node === undefined) {
       report.push({
         type: 'obsolete',
         id: l10nId
       });
+    } else {
+      const msgFromNode = extractMessageFromNode(node);
+      if (!msgsEqual(
+        ftlContext.msgs[l10nId].entry,
+        msgFromNode)) {
+        report.push({
+          type: 'changed',
+          id: l10nId,
+          entry: msgFromNode,
+        })
+      }
     }
   }
 
@@ -111,21 +128,38 @@ function analyzeContext({ ftlContext, htmlData }) {
 }
 
 function syncContext({ htmlData, ftlContext, report }) {
-  const actions = [];
-
   for (const item of report) {
     switch (item.type) {
       case 'obsolete':
         console.warn(`${item.id} is not used in the HTML.`);
+        removeFromFTL(ftlContext, item.id);
         break;
       case 'missing':
         console.warn(`${item.id} is missing from the context.`);
-        actions.push(addToFTL(ftlContext.files, item.msg));
+        addToFTL(ftlContext.files, item.msg);
+        break;
+      case 'changed':
+        console.warn(`${item.id} has changed.`);
+        updateInFTL(
+          ftlContext,
+          item.id,
+          item.entry
+        );
         break;
     }
   }
-  return Promise.all(actions);
+  return ftlContext;
 } 
+
+function saveFTLs(ftlContext) {
+  console.log('\n\n=== Saving files ==\n\n');
+  for (let filePath in ftlContext.files) {
+    console.log(filePath);
+    const str = fluent.serialize(ftlContext.files[filePath]);
+    console.log(str)
+    //write_file(filePath, str);
+  }
+}
 
 function extractMessageFromNode(node) {
   const msg = new fluent.Message();
@@ -147,10 +181,9 @@ function extractMessageFromNode(node) {
 function l10nIdInNodeList(l10nId, nodeList) {
   for (const node of nodeList) {
     if (node.getAttribute('data-l10n-id') === l10nId) {
-      return true;
+      return node;
     }
   }
-  return false;
 }
 
 function loadFTL(source) {
@@ -158,9 +191,10 @@ function loadFTL(source) {
   return ftlAST;
 }
 
-function addToFTL(filePaths, msg) {
+function addToFTL(files, msg) {
   let filePath;
 
+  const filePaths = Object.keys(files);
   if (filePaths.length === 1) {
     filePath = filePaths[0]; 
   } else {
@@ -168,28 +202,42 @@ function addToFTL(filePaths, msg) {
     console.log(filePaths);
     filePath = filePaths[0];
   }
-  return readFilePro(filePath).then(source => {
-    let ftlAST = fluent.parse(source);
-    ftlAST.body.push(msg);
-    let string = fluent.serialize(ftlAST);
-    //console.log(string);
-  })
+  files[filePath].body.push(msg);
 }
 
-function updateInFTL(filePath, msg) {
-  let filePath;
+function updateInFTL(ftlContext, l10nId, newMsg) {
+  let ftlAST = ftlContext.files[ftlContext.msgs[l10nId].filePath];
 
-  if (filePaths.length === 1) {
-    filePath = filePaths[0]; 
-  } else {
-    console.log(`Which FTL file ${msg.id.name} should be added to:`)
-    console.log(filePaths);
-    filePath = filePaths[0];
+  for (let i in ftlAST.body) {
+    let entry = ftlAST.body[i];
+    if (entry.id.name === l10nId) {
+      ftlAST.body[i] = newMsg;
+    }
   }
-  return readFilePro(filePath).then(source => {
-    let ftlAST = fluent.parse(source);
-    ftlAST.body.push(msg);
-    let string = fluent.serialize(ftlAST);
-    console.log(string);
-  })
+}
+
+function removeFromFTL(ftlContext, l10nId) {
+  let ftlAST = ftlContext.files[ftlContext.msgs[l10nId].filePath];
+
+  for (let i in ftlAST.body) {
+    let entry = ftlAST.body[i];
+    if (entry.id.name === l10nId) {
+      ftlAST.body.splice(i, 1);
+    }
+  }
+}
+
+function msgsEqual(msg1, msg2) {
+  if (msg1.type !== msg2.type) {
+    return false;
+  }
+
+  if (msg1.id.name !== msg2.id.name) {
+    return false;
+  }
+
+  if (msg1.value.elements[0] !== msg2.value.elements[0]) {
+    return false;
+  }
+  return true;
 }
