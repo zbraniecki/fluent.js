@@ -108,32 +108,21 @@ export default class FluentParser {
   }
 
   getEntry(ps) {
-    let comment;
-
     if (ps.currentIs("/") || ps.currentIs("#")) {
-      comment = this.getComment(ps);
-
-      // The Comment content doesn't include the trailing newline. Consume
-      // this newline here to be ready for the next entry.  undefined stands
-      // for EOF.
-      ps.expectChar(ps.current() ? "\n" : undefined);
+      return this.getComment(ps);
     }
 
     if (ps.currentIs("[")) {
-      const groupComment = this.getGroupCommentFromSection(ps, comment);
-      if (comment && this.withSpans) {
+      const groupComment = this.getGroupCommentFromSection(ps);
+      if (1==2 && this.withSpans) {
         // The Group Comment should start where the section comment starts.
         groupComment.span.start = comment.span.start;
       }
       return groupComment;
     }
 
-    if (ps.isEntryIDStart() && (!comment || comment.type === "Comment")) {
-      return this.getMessage(ps, comment);
-    }
-
-    if (comment) {
-      return comment;
+    if (ps.isEntryIDStart()) {
+      return this.getMessage(ps);
     }
 
     throw new ParseError("E0002");
@@ -210,7 +199,7 @@ export default class FluentParser {
     return new AST.GroupComment("");
   }
 
-  getMessage(ps, comment) {
+  getMessage(ps) {
     const id = this.getEntryIdentifier(ps);
 
     ps.skipInlineWS();
@@ -240,14 +229,14 @@ export default class FluentParser {
     }
 
     if (id.name.startsWith("-")) {
-      return new AST.Term(id, pattern, attrs, comment);
+      return new AST.Term(id, pattern, attrs, null);
     }
 
     if (pattern === undefined && attrs === undefined) {
       throw new ParseError("E0005", id.name);
     }
 
-    return new AST.Message(id, pattern, attrs, comment);
+    return new AST.Message(id, pattern, attrs, null);
   }
 
   getAttribute(ps) {
