@@ -415,7 +415,7 @@ export default class FluentParser {
       num = `${num}${this.getDigits(ps)}`;
     }
 
-    return new AST.NumberExpression(num);
+    return new AST.NumberLiteral(num);
   }
 
   getPattern(ps) {
@@ -672,7 +672,7 @@ export default class FluentParser {
 
     ps.next();
 
-    return new AST.StringExpression(val);
+    return new AST.StringLiteral(val);
 
   }
 
@@ -686,7 +686,7 @@ export default class FluentParser {
     if (ch === "$") {
       ps.next();
       const name = this.getIdentifier(ps);
-      return new AST.ExternalArgument(name);
+      return new AST.VariableExpression(name);
     }
 
     if (ps.isEntryIDStart()) {
