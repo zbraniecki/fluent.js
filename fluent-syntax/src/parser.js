@@ -686,7 +686,7 @@ export default class FluentParser {
     if (ch === "$") {
       ps.next();
       const name = this.getIdentifier(ps);
-      return new AST.VariableExpression(name);
+      return new AST.VariableReference(name);
     }
 
     if (ps.isEntryIDStart()) {
