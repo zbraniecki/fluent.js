@@ -61,21 +61,7 @@ export default class FluentParser {
     while (ps.current()) {
       const entry = this.getEntryOrJunk(ps);
 
-      if (entry === null) {
-        // That happens when we get a 0.4 style section
-        continue;
-      }
-
-      if (entry.type === "Comment" &&
-        ps.lastCommentZeroFourSyntax && entries.length === 0) {
-        const comment = new AST.ResourceComment(entry.content);
-        comment.span = entry.span;
-        entries.push(comment);
-      } else {
-        entries.push(entry);
-      }
-
-      ps.lastCommentZeroFourSyntax = false;
+      entries.push(entry);
       ps.skipBlankLines();
     }
 
@@ -153,40 +139,7 @@ export default class FluentParser {
     throw new ParseError("E0002");
   }
 
-  getZeroFourStyleComment(ps) {
-    ps.expectChar("/");
-    ps.expectChar("/");
-    ps.takeCharIf(" ");
-
-    let content = "";
-
-    while (true) {
-      let ch;
-      while ((ch = ps.takeChar(x => x !== "\n"))) {
-        content += ch;
-      }
-
-      if (ps.isPeekNextLineZeroFourStyleComment()) {
-        content += "\n";
-        ps.next();
-        ps.expectChar("/");
-        ps.expectChar("/");
-        ps.takeCharIf(" ");
-      } else {
-        break;
-      }
-    }
-
-    const comment = new AST.Comment(content);
-    ps.lastCommentZeroFourSyntax = true;
-    return comment;
-  }
-
   getComment(ps) {
-    if (ps.currentIs("/")) {
-      return this.getZeroFourStyleComment(ps);
-    }
-
     // 0 - comment
     // 1 - group comment
     // 2 - resource comment
