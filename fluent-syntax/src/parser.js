@@ -593,7 +593,8 @@ export default class FluentParser {
 
       return new AST.CallExpression(
         func,
-        args
+        args.positional,
+        args.named,
       );
     }
 
@@ -622,7 +623,9 @@ export default class FluentParser {
   }
 
   getCallArgs(ps) {
-    const args = [];
+    const positional = [];
+    const named = [];
+    const argumentNames = new Set();
 
     ps.skipInlineWS();
 
@@ -632,7 +635,17 @@ export default class FluentParser {
       }
 
       const arg = this.getCallArg(ps);
-      args.push(arg);
+      if (arg.type === "NamedArgument") {
+        if (argumentNames.has(arg.name.name)) {
+          throw new ParseError("E0022");
+        }
+        named.push(arg);
+        argumentNames.add(arg.name.name);
+      } else if (argumentNames.size > 0) {
+        throw new ParseError("E0021");
+      } else {
+        positional.push(arg);
+      }
 
       ps.skipInlineWS();
 
@@ -644,7 +657,10 @@ export default class FluentParser {
         break;
       }
     }
-    return args;
+    return {
+      positional,
+      named
+    };
   }
 
   getArgVal(ps) {
