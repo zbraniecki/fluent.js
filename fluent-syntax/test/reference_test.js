@@ -46,10 +46,8 @@ readdir(fixtures, function(err, filenames) {
             withSpans: false
           });
           erase_annotations(ast);
-          console.log(JSON.stringify(ast));
-          console.log(expected);
           assert.deepEqual(
-            ast, JSON.parse(expected),
+            erase_annotations(ast), JSON.parse(expected),
             'Parsed AST doesn\'t match the expected one'
           );
         });

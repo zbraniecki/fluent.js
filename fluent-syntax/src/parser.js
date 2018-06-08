@@ -108,21 +108,18 @@ export default class FluentParser {
   }
 
   getEntry(ps) {
-    if (ps.currentIs("/") || ps.currentIs("#")) {
-      return this.getComment(ps);
+    let comment = null;
+
+    if (ps.currentIs("#")) {
+      comment = this.getComment(ps);
     }
 
-    if (ps.currentIs("[")) {
-      const groupComment = this.getGroupCommentFromSection(ps);
-      if (1==2 && this.withSpans) {
-        // The Group Comment should start where the section comment starts.
-        groupComment.span.start = comment.span.start;
-      }
-      return groupComment;
-    }
+    ps.takeCharIf("\n");
 
     if (ps.isEntryIDStart()) {
-      return this.getMessage(ps);
+        return this.getMessage(ps, comment);
+    } else if (comment !== null) {
+      return comment;
     }
 
     throw new ParseError("E0002");
@@ -177,29 +174,7 @@ export default class FluentParser {
     return new Comment(content);
   }
 
-  getGroupCommentFromSection(ps, comment) {
-    ps.expectChar("[");
-    ps.expectChar("[");
-
-    ps.skipInlineWS();
-
-    this.getVariantName(ps);
-
-    ps.skipInlineWS();
-
-    ps.expectChar("]");
-    ps.expectChar("]");
-
-    if (comment) {
-      return new AST.GroupComment(comment.content);
-    }
-
-    // A Section without a comment is like an empty Group Comment. Semantically
-    // it ends the previous group and starts a new one.
-    return new AST.GroupComment("");
-  }
-
-  getMessage(ps) {
+  getMessage(ps, comment = null) {
     const id = this.getEntryIdentifier(ps);
 
     ps.skipInlineWS();
@@ -229,14 +204,14 @@ export default class FluentParser {
     }
 
     if (id.name.startsWith("-")) {
-      return new AST.Term(id, pattern, attrs, null);
+      return new AST.Term(id, pattern, attrs, comment);
     }
 
     if (pattern === undefined && attrs === undefined) {
       throw new ParseError("E0005", id.name);
     }
 
-    return new AST.Message(id, pattern, attrs, null);
+    return new AST.Message(id, pattern, attrs, comment);
   }
 
   getAttribute(ps) {
